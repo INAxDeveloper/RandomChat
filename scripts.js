@@ -1,3 +1,8 @@
+import { getAuth, signInAnonymously } from "firebase/auth";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-auth.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/9.1.3/firebase-database.js";
+
 // Firebase configuration (replace with your Firebase config)
 const firebaseConfig = {
     apiKey: "AIzaSyDq9ZvBDn8NTzHns7uusrptpdCWnUC2E_c",
@@ -9,15 +14,18 @@ const firebaseConfig = {
     appId: "1:891233856573:web:5cc92dc377c2e354f58e54"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+
 // Firebase services
 const auth = firebase.auth();
 const database = firebase.database();
 
+let currentUserId;
+
+// Handle anonymous login
 document.getElementById('login-btn').addEventListener('click', () => {
     auth.signInAnonymously().then(() => {
+        currentUserId = auth.currentUser.uid;
         document.getElementById('login-section').style.display = 'none';
         document.getElementById('gender-section').style.display = 'block';
     }).catch((error) => {
@@ -25,16 +33,17 @@ document.getElementById('login-btn').addEventListener('click', () => {
     });
 });
 
+// Handle gender saving
 document.getElementById('save-gender-btn').addEventListener('click', () => {
     const gender = document.querySelector('input[name="gender"]:checked').value;
-    const userId = auth.currentUser.uid;
 
     if (gender) {
-        database.ref('users/' + userId).set({
+        database.ref('users/' + currentUserId).set({
             gender: gender
         }).then(() => {
             document.getElementById('gender-section').style.display = 'none';
             document.getElementById('chat-section').style.display = 'block';
+            startChat();
         }).catch((error) => {
             console.error('Saving gender failed:', error);
         });
@@ -43,7 +52,31 @@ document.getElementById('save-gender-btn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('start-chat-btn').addEventListener('click', () => {
-    // Implement your chat start logic here
-    alert('Chat started!');
-});
+function startChat() {
+    const messagesRef = database.ref('chats');
+
+    // Listen for new messages
+    messagesRef.on('child_added', (snapshot) => {
+        const message = snapshot.val();
+        const messageElement = document.createElement('div');
+        messageElement.textContent = `${message.userId}: ${message.text}`;
+        document.getElementById('messages').appendChild(messageElement);
+        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+    });
+
+    // Send message
+    document.getElementById('send-message-btn').addEventListener('click', () => {
+        const messageText = document.getElementById('message-input').value;
+        if (messageText.trim()) {
+            const newMessageRef = messagesRef.push();
+            newMessageRef.set({
+                userId: currentUserId,
+                text: messageText
+            }).then(() => {
+                document.getElementById('message-input').value = '';
+            }).catch((error) => {
+                console.error('Sending message failed:', error);
+            });
+        }
+    });
+}
